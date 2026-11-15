@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- 与聊天页保持一致的禁缓存策略：改样式后 Ctrl+F5 不必反复按 -->
+<meta http-equiv="Cache-Control" content="no-store">
+<meta http-equiv="Pragma" content="no-cache">
+<title>检测服务助手 · 登录</title>
+<style>
+  /* 一个页面一个文件：样式、脚本、结构全部内联，双击即可打开。
+     配色与 chat.html 统一（微信绿 #07c160），避免登录页蓝、聊天页绿的割裂感。 */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "Microsoft YaHei", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+    background: #f2f2f2;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .card {
+    width: 368px;
+    background: #fff;
+    border-radius: 14px;
+    padding: 34px 32px 28px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.09);
+  }
+  .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+  .brand .logo {
+    width: 44px; height: 44px; border-radius: 10px; background: #07c160; color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 600;
+  }
+  .card h1 { font-size: 20px; color: #191919; }
+  .card p.sub { font-size: 12.5px; color: #999; margin-top: 4px; }
+  label { display: block; font-size: 13px; color: #666; margin: 14px 0 6px; }
+  input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  input:focus { border-color: #07c160; }
+  button {
+    width: 100%;
+    margin-top: 22px;
+    padding: 11px;
+    background: #07c160;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  button:hover { background: #06ad56; }
+  button:disabled { background: #a8e3bf; cursor: not-allowed; }
+  .error {
+    display: none;
+    margin-top: 14px;
+    padding: 9px 12px;
+    background: #fef0f0;
+    color: #fa5151;
+    border-radius: 6px;
+    font-size: 13px;
+  }
+  .tips {
+    margin-top: 20px;
+    padding-top: 14px;
+    border-top: 1px dashed #ededed;
+    font-size: 12px;
+    color: #909399;
+    line-height: 1.9;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="brand">
+    <div class="logo">检</div>
+    <div>
+      <h1>检测服务助手</h1>
+      <p class="sub">样本进度、检测产品、报告查询，AI 优先接待，复杂问题转工程师</p>
+    </div>
+  </div>
+  <label for="username">用户名</label>
+  <input id="username" autocomplete="username" placeholder="chen">
+
+  <label for="password">密码</label>
+  <input id="password" type="password" autocomplete="current-password" placeholder="123456">
+
+  <button id="btn" onclick="doLogin()">登 录</button>
+  <div id="error" class="error"></div>
+
+  <div class="tips">
+    送检客户：chen / lin / wang / zhao / zhou（密码均为 123456）<br>
+    技术支持（坐席）：tech001（登录后进入坐席工作台）
+  </div>
+</div>
+
+<script>
+// 后端地址：静态页与 API 不同端口，按当前主机名拼出后端 origin
+const API = location.protocol + '//' + location.hostname + ':8010';
+
+async function doLogin() {
+  const btn = document.getElementById('btn');
+  const err = document.getElementById('error');
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
+
+  err.style.display = 'none';
+  if (!username || !password) {
+    err.textContent = '请输入用户名和密码';
+    err.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '登录中…';
+  try {
+    const resp = await fetch(API + '/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      throw new Error(data.detail || '登录失败');
+    }
+    // token 和用户信息存 localStorage：chat.html 与 WebSocket 都要用
+    localStorage.setItem('token', data.access_token);
+    localStorage.setItem('user', JSON.stringify(data.user));
+    location.href = 'chat.html';
+  } catch (e) {
+    err.textContent = e.message.includes('Failed to fetch')
+      ? '连不上后端服务，请确认已在 PyCharm 启动（端口 8010）'
+      : e.message;
+    err.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '登 录';
+  }
+}
+
+// 回车等同点击登录
+document.getElementById('password').addEventListener('keyup', (e) => {
+  if (e.key === 'Enter') doLogin();
+});
+</script>
+</body>
+</html>
