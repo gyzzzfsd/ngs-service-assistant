@@ -2,19 +2,19 @@
 setup_test_db.py —— 创建/重置测试专用数据库
 
 职责：
-    在 hadoop100 上重建 ngs_service_assistant_test 库：直接执行
+    在 PostgreSQL 上重建 ngs_service_assistant_test 库：直接执行
     ngs_schema.sql（12 张表）+ seed_ngs.sql（种子数据）。
     比旧版"从开发库整表拷贝"更确定：开发库被手工使用后的脏状态
     不会被带进测试库 —— 测试的前提永远来自同一份种子 SQL。
 
-为什么需要它（2026-11-12 引入，2026-11-15 改为 SQL 直建）：
+为什么需要它：
     此前测试直接跑在开发库上。测试虽然用 SAVEPOINT 回滚、不留数据，
     但它**读**库里已提交的状态 —— 用例写着"王医生名下只有 1 张
     qc_failed 委托单"，你一用系统手工复检两次，前提就破了，测试变红。
     根治办法：测试跑在独立库上，开发库随便用，互不影响。
 
-用法（Windows，项目根目录）：
-    D:\\app\\anaconda\\envs\\llm1\\python.exe tests\\setup_test_db.py
+用法（项目根目录）：
+    python tests/setup_test_db.py
 
 什么时候需要重跑：
     - script/ 里的种子 SQL 改了内容时（想让测试用上新种子）
@@ -32,30 +32,31 @@ from pathlib import Path
 
 import psycopg
 
-# ---------- 连接参数（与 .env 的开发库保持同一账号，只是库名不同） ----------
-HOST = "192.168.218.100"
-PORT = 5432
-USER = "ai_cs"
-PASSWORD = "ai_cs_pwd_2026"
+# ---------- 连接参数统一从项目根 .env 派生，代码里不留明文口令 ----------
 TEST_DB = "ngs_service_assistant_test"
+
+
+def _pg_dsn(dbname: str | None = None) -> str:
+    """从 .env 的 DATABASE_URL 派生 psycopg DSN；dbname 非空时替换库名。"""
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("DATABASE_URL="):
+            dsn = line.split("=", 1)[1].strip().replace("postgresql+psycopg://", "postgresql://")
+            return dsn.rsplit("/", 1)[0] + "/" + dbname if dbname else dsn
+    raise RuntimeError(".env 里找不到 DATABASE_URL；请先复制 .env.example 为 .env 并填写")
 
 
 def _script_dir() -> Path:
     """
-    定位伴生数据目录里的 script/（ngs_schema.sql / seed_ngs.sql 所在）。
+    定位仓库内 script/（ngs_schema.sql / seed_ngs.sql 所在）。
 
-    # script/ 不在代码仓里而在伴生数据目录（代码与数据分离），
-    # 因此要用代码仓根目录（ngs_service_assistant）的父目录去找同级的
-    # ngs_service_assistant_data/。
+    # 表结构与种子数据随代码一起版本化，clone 后无需外部目录即可建库。
     # 找不到 schema 文件时直接报错，不做静默回退。
     """
-    project_root = Path(__file__).resolve().parent.parent  # 代码仓根（ngs_service_assistant/）
-    candidate = project_root.parent / "ngs_service_assistant_data" / "script"
+    candidate = Path(__file__).resolve().parent.parent / "script"
     if (candidate / "ngs_schema.sql").exists():
         return candidate
-    raise RuntimeError(
-        "找不到 ngs_schema.sql：请在 ngs_service_assistant_data/script/ 下确认文件存在"
-    )
+    raise RuntimeError("找不到 ngs_schema.sql：请确认仓库内 script/ 目录完整")
 
 
 def _statements(sql_text: str) -> list[str]:
@@ -84,14 +85,12 @@ def recreate_test_db() -> None:
     seed_stmts = _statements(seed_path.read_text(encoding="utf-8"))
 
     # DROP/CREATE DATABASE 不能在事务里跑，必须 autocommit
-    with psycopg.connect(host=HOST, port=PORT, dbname="postgres",
-                         user=USER, password=PASSWORD, autocommit=True) as conn:
+    with psycopg.connect(_pg_dsn("postgres"), autocommit=True) as conn:
         # 有人/有测试正连着测试库时 DROP 会失败，提示信息里直接说明原因
         conn.execute(f"DROP DATABASE IF EXISTS {TEST_DB}")
         conn.execute(f"CREATE DATABASE {TEST_DB}")
 
-    with psycopg.connect(host=HOST, port=PORT, dbname=TEST_DB,
-                         user=USER, password=PASSWORD) as conn:
+    with psycopg.connect(_pg_dsn(TEST_DB)) as conn:
         # vector 扩展是"库级别"的，新库不会自动继承开发库的扩展，
         # 必须先建扩展再建 document_chunks（vector 列类型依赖它）。
         # schema 的第一条语句就是 CREATE EXTENSION，这里无需单独处理。
@@ -106,8 +105,7 @@ def main() -> int:
     recreate_test_db()
 
     # 自检：种子的关键前提能查到，测试用例依赖这些数字
-    with psycopg.connect(host=HOST, port=PORT, dbname=TEST_DB,
-                         user=USER, password=PASSWORD) as conn:
+    with psycopg.connect(_pg_dsn(TEST_DB)) as conn:
         with conn.cursor() as cur:
             checks = {
                 "账号数": ("SELECT count(*) FROM users", 6),

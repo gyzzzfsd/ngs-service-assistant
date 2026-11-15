@@ -5,8 +5,11 @@ harness 五关卡事实校验 + 混合检索 RAG（稠密 + 稀疏 + RRF）+ 写
 （申请加急 / 申请复检 / 退单）+ 转人工（技术支持/生信工程师）+ agent_runs 观测落库
 + WebSocket 实时推送 + 前端双视图 + 全量盘点确定性查库通道（防止沿用历史旧清单）。
 
-数据库 hadoop100（PostgreSQL 16 + pgvector，`ngs_service_assistant`），大模型用智谱 GLM，
-embedding 用本地 bge-m3 双头（稠密 + 稀疏，GPU）。
+技术栈：FastAPI + PostgreSQL 16 / pgvector + 智谱 GLM（OpenAI 兼容协议）
++ 本地 bge-m3 双头编码（稠密 + 稀疏，GPU）+ 原生 HTML/JS 前端（无构建步骤）。
+
+> **免责声明**：本项目仅提供信息查询与流程支持，所有账号、委托单、样本与报告
+> 变异均为虚构演示数据，不构成医学建议，也不用于任何诊断或治疗决策。
 
 ---
 
@@ -23,9 +26,9 @@ embedding 用本地 bge-m3 双头（稠密 + 稀疏，GPU）。
 
 **退单演示扩展数据**（两个脚本，均只灌开发库、可重复执行，演示后重跑即复位）：
 
-- `../ngs_service_assistant_data/script/seed_extra_cancel_orders.sql` —— 3 张单
+- `script/seed_extra_cancel_orders.sql` —— 3 张单
   （101 已接收 / 102 质检不合格 / 103 建库完成），覆盖退单白名单与「已建库不可退」边界。
-- `../ngs_service_assistant_data/script/seed_extra_received_orders.sql` —— 6 张全
+- `script/seed_extra_received_orders.sql` —— 6 张全
   `received` 单（104~109），各配 1 款在售产品，供批量退单演示。
 
 两份都灌完后陈医生共 16 张单、9 张可退单候选；`get_user_orders` 的查询上限已
@@ -33,21 +36,47 @@ embedding 用本地 bge-m3 双头（稠密 + 稀疏，GPU）。
 
 ---
 
-## 启动前端
+## 快速开始
 
-先启动后端（PyCharm 运行 run.py），再开一个命令行窗口起静态服务器：
+所有命令都在**项目根目录**执行。Python 3.12，主要依赖 fastapi、uvicorn、psycopg、
+pydantic-settings、FlagEmbedding、torch（torch 请按本机 CUDA 版本自行安装）。
 
 ```powershell
-cd D:\allCode\AI_Model\project\Project_2_NGS_Assistant\ngs_service_assistant
-D:\app\anaconda\envs\llm1\python.exe -m http.server 8080 --directory web
+# 1. 配置：复制模板并填写 DATABASE_URL / LLM_API_KEY / JWT_SECRET
+cp .env.example .env
+
+# 2. 建库（PostgreSQL 需已装 pgvector 扩展）
+#    用任意 PG 客户端在开发库依次执行：
+#      script/ngs_schema.sql   12 张表 + vector 扩展
+#      script/seed_ngs.sql     6 个账号 / 11 张委托单 / 报告变异等种子
+python tests/setup_test_db.py     # 重建独立测试库（跑 pytest 前执行一次）
+
+# 3. 语料入库：扫描 document/docs/*.md 切块并做双路编码（首次加载 bge-m3 到 GPU）
+python -m app.ingest
+
+# 4. 启动（两个窗口）
+python run.py                                  # 后端 API + WebSocket，端口 8010
+python -m http.server 8080 --directory web     # 前端静态页，端口 8080
 ```
 
 浏览器打开 <http://127.0.0.1:8080/login.html>。
 
+`.env` 已被 `.gitignore` 排除；`tests/setup_test_db.py` 与 `tests/smoke.py` 都从 `.env`
+派生数据库连接串，代码里不含明文口令。测试跑在独立的 `ngs_service_assistant_test` 库，
+不会动开发库。表结构 SQL、种子数据与 8 份语料都随代码一起版本化，clone 后即可复现。
+
+## 启动前端
+
+先启动后端（PyCharm 运行 `run.py` 亦可），再开一个命令行窗口起静态服务器：
+
+```powershell
+python -m http.server 8080 --directory web
+```
+
 改完代码想快速验一遍整体链路，后端启动后另开命令行跑端到端冒烟（约 1 分钟，真调模型）：
 
 ```powershell
-D:\app\anaconda\envs\llm1\python.exe tests/smoke.py
+python tests/smoke.py
 ```
 
 31 项检查覆盖健康检查、鉴权、真实 LLM 问答、写操作三重条件、转人工状态机、库内一致性；
@@ -105,9 +134,14 @@ app/            后端全部代码，一个功能一个文件，平铺不建子�
 web/            前端（两个页面，纯原生 HTML/JS）
   login.html    登录页
   chat.html     客户聊天 + 坐席工作台（按角色切换）
-run.py          PyCharm 启动入口
-tests/          pytest 用例（221 个，跑独立测试库 ngs_service_assistant_test）
-logs/app.log    运行日志（5MB 轮转，留 3 份）
-script/         设计文档、表结构 SQL 与种子数据（伴生数据目录）
-document/       知识库语料原文与切块脚本（伴生数据目录）
+run.py          启动入口
+tests/          pytest 用例（233 个，跑独立测试库 ngs_service_assistant_test）
+  smoke.py      端到端冒烟（31 项，需后端已启动）
+script/         表结构与种子数据，随代码一起版本化
+  ngs_schema.sql          12 张表 + pgvector 扩展
+  seed_ngs.sql            基础种子（6 账号 / 11 委托单 / 报告变异）
+  seed_extra_*.sql        演示用的扩展委托单
+document/docs/  知识库语料（8 份 md：产品说明 / SOP / 报告解读指南 / FAQ）
+.env.example    配置模板（复制为 .env 后填写，.env 不入库）
+logs/app.log    运行日志（5MB 轮转，留 3 份，不入库）
 ```

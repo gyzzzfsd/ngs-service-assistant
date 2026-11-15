@@ -40,13 +40,13 @@ class Settings(BaseSettings):
     )
 
     # ---------- 应用 ----------
-    app_name: str = "AI Customer Service"
+    app_name: str = "NGS Service Assistant"
     app_env: str = "dev"
     app_host: str = "0.0.0.0"
     app_port: int = 8010
     log_level: str = "INFO"
 
-    # ---------- 数据库（hadoop100 上的 PG16 + pgvector）----------
+    # ---------- 数据库（PostgreSQL 16 + pgvector）----------
     database_url: str
     db_echo: bool = False
     db_pool_size: int = 5

@@ -2,7 +2,7 @@
 smoke.py —— 端到端冒烟测试（需后端已启动）
 
 用法：
-    D:/app/anaconda/envs/llm1/python.exe tests/smoke.py
+    python tests/smoke.py
 
 覆盖六组：
     A 基础设施   /health、静态页、WebSocket、数据库连通
@@ -36,8 +36,19 @@ from websockets.sync.client import connect
 
 API = "http://127.0.0.1:8010"
 WEB = "http://127.0.0.1:8080"
-DB = "host=192.168.218.100 port=5432 user=ai_cs password=ai_cs_pwd_2026 dbname=ngs_service_assistant"
-SEED_DIR = Path(__file__).resolve().parent.parent.parent / "ngs_service_assistant_data" / "script"
+SEED_DIR = Path(__file__).resolve().parent.parent / "script"
+
+
+def _pg_dsn() -> str:
+    """从项目根 .env 派生开发库 DSN，代码里不留明文口令。"""
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("DATABASE_URL="):
+            return line.split("=", 1)[1].strip().replace("postgresql+psycopg://", "postgresql://")
+    raise RuntimeError(".env 里找不到 DATABASE_URL；请先复制 .env.example 为 .env 并填写")
+
+
+DB = _pg_dsn()
 
 RESULTS: list[tuple[str, bool, str]] = []
 STATE: dict = {}

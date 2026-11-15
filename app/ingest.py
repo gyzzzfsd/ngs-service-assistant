@@ -10,8 +10,8 @@ ingest.py —— 语料入库（切块 + 双路索引回填）的命令行脚本
        2.2 稀疏路：词项权重 {token_id: weight} → chunk_sparse_terms 倒排表（混合检索用）
        这是语料入库期的一次性动作，之后每次改动语料内容都可以重跑。
 
-用法（Windows，项目根目录）：
-    D:\\app\\anaconda\\envs\\llm1\\python.exe -m app.ingest
+用法（项目根目录）：
+    python -m app.ingest
     加 --rebuild 参数强制全量重算（默认只补"新文档 + embedding 为 NULL
     或缺稀疏词项"的行，与 .env 的 EMBEDDING_REBUILD=true 等效，命令行参数优先）。
 

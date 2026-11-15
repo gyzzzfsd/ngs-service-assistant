@@ -88,7 +88,7 @@ def raw_conn():
         if "ngs_service_assistant_test" in str(e) and "does not exist" in str(e):
             raise RuntimeError(
                 "测试库 ngs_service_assistant_test 不存在。请在项目根目录执行：\n"
-                "  D:\\app\\anaconda\\envs\\llm1\\python.exe tests\\setup_test_db.py\n"
+                "  python tests/setup_test_db.py\n"
                 "它会在服务器上用 ngs_schema.sql + seed_ngs.sql 重建测试库。"
             ) from e
         raise

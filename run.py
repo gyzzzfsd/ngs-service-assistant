@@ -8,7 +8,7 @@ run.py —— 后端启动入口（PyCharm 里就是运行这个文件）
 为什么需要这个文件而不直接在 PyCharm 里跑 uvicorn 命令：
     PyCharm 的 Python 运行配置只能指定"脚本文件"，不能直接跑 `uvicorn` 这个可执行程序
     （除非配成模块运行并手填一堆参数）。包一层 run.py 之后，只要把 Script path 指向它，
-    解释器选 llm1，就能一键启动，还能直接下断点调试。
+    选好项目解释器，就能一键启动，还能直接下断点调试。
 
 热重载：
     默认关闭 reload。原因是 reload 模式下 uvicorn 会起子进程，

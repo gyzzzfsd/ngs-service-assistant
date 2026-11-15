@@ -34,8 +34,7 @@ def test_knowledge_dir_resolved_to_absolute():
     知识库目录必须解析成存在的绝对路径，否则换个工作目录就读不到手册。
 
     # 为什么不再断言目录在项目根（path.parent == BASE_DIR）？
-    # document/ 与 script/ 放在伴生数据目录，
-    # 与代码仓分离，.env 已指向该位置。
+    # 知识库目录由 KNOWLEDGE_DIR 配置，可相对也可绝对，
     # 目录在哪属于部署布局，不属于配置正确性 —— 测试只该管"路径可用"。
     """
     path = settings.knowledge_dir_path
